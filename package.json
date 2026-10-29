@@ -1,0 +1,27 @@
+{
+  "name": "zoo-game",
+  "private": true,
+  "version": "0.14.0",
+  "description": "Моя игра — Зоопарк: детская игра про животных для 3–7 лет",
+  "type": "module",
+  "engines": {
+    "node": ">=22.12"
+  },
+  "scripts": {
+    "dev": "vite --host",
+    "build": "npm run typecheck && vite build",
+    "preview": "vite preview --host",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "audio:manifest": "node scripts/audio-manifest.mjs"
+  },
+  "dependencies": {
+    "phaser": "4.2.1"
+  },
+  "devDependencies": {
+    "@types/node": "22.20.5",
+    "typescript": "7.0.2",
+    "vite": "8.3.5",
+    "vitest": "5.0.5"
+  }
+}
