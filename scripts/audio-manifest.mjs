@@ -3,8 +3,10 @@
 //   npm run audio:manifest
 import { readdirSync, writeFileSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
-const root = new URL('../public/audio/', import.meta.url).pathname;
+// fileURLToPath, а не .pathname: на Windows .pathname даёт «/C:/...», и папка не находится.
+const root = fileURLToPath(new URL('../public/audio/', import.meta.url));
 const entries = [];
 for (const lang of ['ru', 'en']) {
   const dir = join(root, lang);

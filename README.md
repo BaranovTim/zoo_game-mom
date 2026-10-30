@@ -39,9 +39,22 @@ npm run dev
 
 ## Озвучка
 
-Пока фразы читает синтез речи браузера: смотритель обычным голосом, зверь повыше. Когда появятся записи из ElevenLabs:
+Пока фразы читает синтез речи браузера: смотритель обычным голосом, зверь повыше. Записи из ElevenLabs
+лежат в `public/audio/<язык>/<ключ>.mp3` (например `public/audio/ru/animal.panda.hello.mp3`)
+и перечислены в `public/audio/manifest.json`. Фразы без записи по-прежнему читает браузер.
 
-1. Положите файлы в `public/audio/ru/` и `public/audio/en/`, имя файла = ключ фразы, например `animal.panda.hello.mp3`.
-2. Выполните `npm run audio:manifest`.
+Озвучить все фразы через API ElevenLabs (нужны ключ и ID двух голосов из My Voices):
+
+```powershell
+$env:ELEVENLABS_API_KEY = "ключ из Profile → API Keys"
+$env:ELEVENLABS_VOICE_KEEPER = "ID голоса смотрителя"
+$env:ELEVENLABS_VOICE_ANIMAL = "ID голоса зверя"
+node scripts/voice-generate.mjs --dry-run            # что будет озвучено и сколько символов
+node scripts/voice-generate.mjs --only animal.panda  # проба: только панда
+node scripts/voice-generate.mjs                      # все незаписанные фразы на обоих языках
+```
+
+Уже записанные файлы скрипт пропускает, `--force` перезаписывает их, `--lang ru` ограничивает одним языком.
+Если файлы положены вручную, выполните `npm run audio:manifest`.
 
 Игра сама начнёт играть записи вместо синтеза.
