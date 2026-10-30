@@ -1,6 +1,6 @@
 import Phaser from 'phaser';
 import { getAnimal, textureKey, type Animal, type Emotion } from '../data/animals';
-import { FOODS, type FoodId } from '../data/foods';
+import { FOOD_SIZE, foodTexture, type FoodId } from '../data/foods';
 import { saveSettings, settings, type Level } from '../settings';
 import { drawEnclosure } from '../ui/background';
 import { roundButton } from '../ui/buttons';
@@ -166,9 +166,7 @@ export class FeedScene extends Phaser.Scene {
     bg.fillRoundedRect(-CARD / 2, -CARD / 2, CARD, CARD, 30);
     bg.lineStyle(4, COLORS.line, 1);
     bg.strokeRoundedRect(-CARD / 2, -CARD / 2, CARD, CARD, 30);
-    const icon = this.add
-      .text(0, 4, FOODS[food], { fontFamily: FONT, fontSize: '104px', resolution: TEXT_RESOLUTION })
-      .setOrigin(0.5);
+    const icon = this.add.image(0, 0, foodTexture(food)).setScale(150 / FOOD_SIZE);
 
     const card = this.add.container(x, y, [bg, icon]).setSize(CARD, CARD).setDepth(10);
     card.setData({ food, homeX: x, homeY: y, dragged: false });
@@ -291,11 +289,8 @@ export class FeedScene extends Phaser.Scene {
   private fillSlot(index: number, food: FoodId): void {
     const slot = this.slots[index];
     if (!slot) return;
-    const icon = this.add
-      .text(slot.x, slot.y + 2, FOODS[food], { fontFamily: FONT, fontSize: '52px', resolution: TEXT_RESOLUTION })
-      .setOrigin(0.5)
-      .setScale(0);
-    this.tweens.add({ targets: icon, scale: 1, duration: 300, ease: 'Back.easeOut' });
+    const icon = this.add.image(slot.x, slot.y, foodTexture(food)).setScale(0);
+    this.tweens.add({ targets: icon, scale: 74 / FOOD_SIZE, duration: 300, ease: 'Back.easeOut' });
   }
 
   // ---------- Подсказки ----------
@@ -343,8 +338,8 @@ export class FeedScene extends Phaser.Scene {
     const card = this.cards.find((c) => this.animal.food.includes(c.getData('food') as FoodId));
     if (!card) return;
     const ghost = this.add
-      .text(card.x, card.y, FOODS[card.getData('food') as FoodId], { fontFamily: FONT, fontSize: '96px', resolution: TEXT_RESOLUTION })
-      .setOrigin(0.5)
+      .image(card.x, card.y, foodTexture(card.getData('food') as FoodId))
+      .setScale(140 / FOOD_SIZE)
       .setAlpha(0.7)
       .setDepth(60);
     const hand = this.add

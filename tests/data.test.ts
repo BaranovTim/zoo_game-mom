@@ -43,6 +43,12 @@ describe('тексты', () => {
   it('у каждого вида еды есть название', () => {
     for (const food of FOOD_IDS) expect(ru, food).toHaveProperty([`food.${food}`]);
   });
+
+  it('у каждого вида еды есть картинка', () => {
+    for (const food of FOOD_IDS) {
+      expect(existsSync(new URL(`../public/assets/foods/${food}.webp`, import.meta.url)), food).toBe(true);
+    }
+  });
 });
 
 describe('животные', () => {

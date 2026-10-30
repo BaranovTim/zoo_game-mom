@@ -1,11 +1,15 @@
-"""Готовит картинки животных для игры: 2048 px PNG с прозрачным фоном -> 1024 px WebP.
+"""Готовит картинки для игры из вырезанных PNG с прозрачным фоном.
 
-Источник: папка с вырезанными картинками, где у каждого животного своя подпапка
-с файлами <animal>_<emotion>.png (так устроена art/cutout в файлах проекта).
+Животные: папка, где у каждого животного своя подпапка с файлами <animal>_<emotion>.png
+(так устроена art/cutout в файлах проекта), 2048 px -> 1024 px WebP:
 
     python3 scripts/prepare_art.py <папка-cutout> panda lion ...
 
-Результат: public/assets/animals/<animal>/<emotion>.webp
+Еда: папка с файлами <id>.png (art/food_cutout в файлах проекта) -> 512 px WebP:
+
+    python3 scripts/prepare_art.py --food <папка-food_cutout>
+
+Результат: public/assets/animals/<animal>/<emotion>.webp и public/assets/foods/<id>.webp
 Нужен Pillow: python3 -m pip install Pillow
 """
 import sys
@@ -13,10 +17,17 @@ from pathlib import Path
 
 from PIL import Image
 
-SIZE = 1024
 QUALITY = 88
 EMOTIONS = ("base", "happy", "like", "chew", "think", "celebrate", "sleep")
-OUT = Path(__file__).resolve().parent.parent / "public" / "assets" / "animals"
+ASSETS = Path(__file__).resolve().parent.parent / "public" / "assets"
+
+
+def save_webp(src: Path, dst: Path, size: int) -> None:
+    dst.parent.mkdir(parents=True, exist_ok=True)
+    with Image.open(src) as img:
+        img = img.convert("RGBA").resize((size, size), Image.LANCZOS)
+        img.save(dst, "WEBP", quality=QUALITY, method=6)
+    print(f"{src.name} -> {dst.relative_to(ASSETS.parent.parent)} ({dst.stat().st_size // 1024} КБ)")
 
 
 def find_source(root: Path, animal: str, emotion: str) -> Path:
@@ -27,19 +38,19 @@ def find_source(root: Path, animal: str, emotion: str) -> Path:
 
 
 def main() -> None:
+    if len(sys.argv) == 3 and sys.argv[1] == "--food":
+        sources = sorted(Path(sys.argv[2]).glob("*.png"))
+        if not sources:
+            sys.exit(f"Нет PNG в {sys.argv[2]}")
+        for src in sources:
+            save_webp(src, ASSETS / "foods" / f"{src.stem}.webp", 512)
+        return
     if len(sys.argv) < 3:
         sys.exit(__doc__)
     root = Path(sys.argv[1])
     for animal in sys.argv[2:]:
-        target = OUT / animal
-        target.mkdir(parents=True, exist_ok=True)
         for emotion in EMOTIONS:
-            src = find_source(root, animal, emotion)
-            with Image.open(src) as img:
-                img = img.convert("RGBA").resize((SIZE, SIZE), Image.LANCZOS)
-                dst = target / f"{emotion}.webp"
-                img.save(dst, "WEBP", quality=QUALITY, method=6)
-            print(f"{src.name} -> {dst.relative_to(OUT.parent.parent.parent)} ({dst.stat().st_size // 1024} КБ)")
+            save_webp(find_source(root, animal, emotion), ASSETS / "animals" / animal / f"{emotion}.webp", 1024)
 
 
 if __name__ == "__main__":

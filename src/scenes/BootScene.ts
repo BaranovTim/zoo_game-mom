@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 import { EMOTIONS, PLAYABLE, textureKey } from '../data/animals';
+import { FOOD_IDS, foodTexture } from '../data/foods';
 import { COLORS, HEIGHT, WIDTH } from '../ui/theme';
 import { voice } from '../voice';
 
@@ -19,6 +20,7 @@ export class BootScene extends Phaser.Scene {
         this.load.image(textureKey(id, emotion), `assets/animals/${id}/${emotion}.webp`);
       }
     }
+    for (const food of FOOD_IDS) this.load.image(foodTexture(food), `assets/foods/${food}.webp`);
   }
 
   create(): void {
