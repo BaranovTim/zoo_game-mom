@@ -95,6 +95,13 @@ for (const job of jobs) {
     console.error(`Ошибка на ${job.lang}/${job.key}: ${error.message}`);
     // Неверный ключ, нет доступа или кончились символы — дальше пробовать бессмысленно.
     if ([401, 402, 403, 429].includes(error.status)) break;
+    if (/voice_not_found|invalid_uid/.test(error.message)) {
+      console.error(
+        'Голос не найден. Проверьте ID в ELEVENLABS_VOICE_KEEPER и ELEVENLABS_VOICE_ANIMAL ' +
+          '(Voices → My Voices → ⋯ → Copy voice ID). Голоса из Voice Library через API доступны только на платном тарифе.',
+      );
+      break;
+    }
   }
 }
 if (done < jobs.length) {
