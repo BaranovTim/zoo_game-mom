@@ -1,7 +1,7 @@
 {
   "name": "zoo-game",
   "private": true,
-  "version": "0.14.0",
+  "version": "0.15.0",
   "description": "Моя игра — Зоопарк: детская игра про животных для 3–7 лет",
   "type": "module",
   "engines": {

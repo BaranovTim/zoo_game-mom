@@ -1,6 +1,11 @@
 import Phaser from 'phaser';
+import { AlbumScene } from './scenes/AlbumScene';
 import { BootScene } from './scenes/BootScene';
+import { CareScene } from './scenes/CareScene';
 import { FeedScene } from './scenes/FeedScene';
+import { MapScene } from './scenes/MapScene';
+import { PuzzleScene } from './scenes/PuzzleScene';
+import { TimeUpScene } from './scenes/TimeUpScene';
 import { TitleScene } from './scenes/TitleScene';
 import { HEIGHT, WIDTH } from './ui/theme';
 
@@ -22,7 +27,11 @@ const game = new Phaser.Game({
     height: HEIGHT,
   },
   input: { activePointers: 2 },
-  scene: [BootScene, TitleScene, FeedScene],
+  // Одна текстура на пакет отрисовки. С пакетами на несколько текстур повёрнутые листья, сердечки
+  // и кусочки пазла рисовались с дырами (проверено в Chromium с программным WebGL).
+  // Объектов на экране мало, лишние вызовы отрисовки незаметны даже на слабом планшете.
+  render: { maxTextures: 1 },
+  scene: [BootScene, TitleScene, MapScene, AlbumScene, FeedScene, CareScene, PuzzleScene, TimeUpScene],
 });
 
 if (import.meta.env.DEV) window.zooGame = game;

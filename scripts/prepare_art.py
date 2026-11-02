@@ -9,7 +9,8 @@
 
     python3 scripts/prepare_art.py --food <папка-food_cutout>
 
-Результат: public/assets/animals/<animal>/<emotion>.webp и public/assets/foods/<id>.webp
+Результат: public/assets/animals/<animal>/<emotion>.webp (плюс thumb.webp — радостная картинка 320 px
+для карты и альбома) и public/assets/foods/<id>.webp
 Нужен Pillow: python3 -m pip install Pillow
 """
 import sys
@@ -18,6 +19,7 @@ from pathlib import Path
 from PIL import Image
 
 QUALITY = 88
+THUMB = 320
 EMOTIONS = ("base", "happy", "like", "chew", "think", "celebrate", "sleep")
 ASSETS = Path(__file__).resolve().parent.parent / "public" / "assets"
 
@@ -51,6 +53,7 @@ def main() -> None:
     for animal in sys.argv[2:]:
         for emotion in EMOTIONS:
             save_webp(find_source(root, animal, emotion), ASSETS / "animals" / animal / f"{emotion}.webp", 1024)
+        save_webp(find_source(root, animal, "happy"), ASSETS / "animals" / animal / "thumb.webp", THUMB)
 
 
 if __name__ == "__main__":

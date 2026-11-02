@@ -1,6 +1,6 @@
 import { existsSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
-import { ANIMALS, EMOTIONS, PLAYABLE } from '../src/data/animals';
+import { ANIMALS, EMOTIONS, ZONES, animalsIn } from '../src/data/animals';
 import { FOOD_IDS } from '../src/data/foods';
 import en from '../src/locales/en.json';
 import ru from '../src/locales/ru.json';
@@ -25,10 +25,27 @@ const SHARED_KEYS = [
   'ui.settings_level',
   'ui.level_little',
   'ui.level_explorer',
+  'ui.settings_timer',
+  'ui.minutes',
+  'keeper.welcome_back',
+  'keeper.map_choose',
+  'keeper.map_locked',
+  'keeper.visit_end',
+  'keeper.album_open',
+  'keeper.album_empty',
+  'keeper.album_full',
+  'keeper.time_up',
+  'hint.look',
+  'hint.find_more',
+  'game.puzzle',
+  'game.puzzle_done',
+  ...['wash', 'brush', 'clean', 'sleep'].flatMap((a) => [`care.${a}_ask`, `care.${a}_done`]),
+  'care.sleep_yawn',
+  ...ZONES.map((zone) => `zone.${zone}`),
   ...Array.from({ length: 15 }, (_, i) => `praise.${String(i + 1).padStart(2, '0')}`),
   ...Array.from({ length: 5 }, (_, i) => `oops.${String(i + 1).padStart(2, '0')}`),
   ...Array.from({ length: 5 }, (_, i) => `tap.${String(i + 1).padStart(2, '0')}`),
-  ...Array.from({ length: 6 }, (_, i) => `count.${String(i + 1).padStart(2, '0')}`),
+  ...Array.from({ length: 10 }, (_, i) => `count.${String(i + 1).padStart(2, '0')}`),
 ];
 
 describe('тексты', () => {
@@ -64,9 +81,14 @@ describe('животные', () => {
     for (const key of ANIMAL_KEYS) expect(ru).toHaveProperty([`animal.${id}.${key}`]);
   });
 
-  it.each(PLAYABLE.map((id) => [id]))('%s: все 7 картинок лежат в public/assets', (id) => {
-    for (const emotion of EMOTIONS) {
-      expect(existsSync(new URL(`../public/assets/animals/${id}/${emotion}.webp`, import.meta.url))).toBe(true);
+  it.each(ANIMALS.map((a) => [a.id]))('%s: 7 картинок и портрет лежат в public/assets', (id) => {
+    for (const picture of [...EMOTIONS, 'thumb']) {
+      expect(existsSync(new URL(`../public/assets/animals/${id}/${picture}.webp`, import.meta.url)), picture).toBe(true);
     }
+  });
+
+  it('каждый зверь стоит в одной из зон карты', () => {
+    for (const animal of ANIMALS) expect(ZONES).toContain(animal.zone);
+    expect(ZONES.reduce((n, zone) => n + animalsIn(zone).length, 0)).toBe(ANIMALS.length);
   });
 });

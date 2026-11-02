@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import { textureKey } from '../data/animals';
 import { t } from '../i18n';
+import { startClock } from '../playClock';
 import { drawEnclosure } from '../ui/background';
 import { roundButton } from '../ui/buttons';
 import { openParentGate } from '../ui/parentGate';
@@ -8,7 +9,7 @@ import { attachSubtitles } from '../ui/subtitle';
 import { COLORS, FONT, INK, TEXT_RESOLUTION, WIDTH } from '../ui/theme';
 import { voice } from '../voice';
 
-/** Главный экран: панда и большая кнопка «Играть». Шестерёнка ведёт в раздел для взрослых. */
+/** Главный экран: панда и большая кнопка «Играть» (ведёт на карту зоопарка). Шестерёнка — раздел для взрослых. */
 export class TitleScene extends Phaser.Scene {
   constructor() {
     super('title');
@@ -53,6 +54,7 @@ export class TitleScene extends Phaser.Scene {
   private startGame(): void {
     voice.unlock();
     voice.stop();
-    this.scene.start('feed', { animal: 'panda' });
+    startClock();
+    this.scene.start('map');
   }
 }
