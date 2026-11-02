@@ -7,7 +7,7 @@ import { textButton } from './buttons';
 import { COLORS, FONT, HEIGHT, INK, TEXT_RESOLUTION, WIDTH } from './theme';
 
 const PANEL_W = 1000;
-const PANEL_H = 760;
+const PANEL_H = 840;
 const TOP = HEIGHT / 2 - PANEL_H / 2;
 
 export interface ParentGateOptions {
@@ -89,6 +89,17 @@ export function openParentGate(scene: Phaser.Scene, options: ParentGateOptions =
       ...MINUTES.map((m, i) =>
         option(WIDTH / 2 + (i - 1.5) * 210, TOP + 590, m === 0 ? '∞' : t('ui.minutes', { n: m }), settings.minutes === m, setMinutes(m)),
       ),
+      // Проверка голоса: какой голос синтеза выбран для языка. Нажатие произносит фразу.
+      textButton(scene, WIDTH / 2, TOP + 730, `🔊 ${voiceName()}`, () => {
+        voice.unlock();
+        void voice.say('keeper.welcome_back');
+      }),
     ]);
+  }
+
+  function voiceName(): string {
+    const name = voice.describe();
+    if (!name) return '—';
+    return name.length > 42 ? `${name.slice(0, 40)}…` : name;
   }
 }

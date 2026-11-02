@@ -10,6 +10,22 @@ function speakerOf(key: string): Speaker {
   return SPEAKERS[key] ?? (key.startsWith('animal.') ? 'animal' : 'keeper');
 }
 
+const synth: SpeechSynthesis | null = typeof window !== 'undefined' && 'speechSynthesis' in window ? window.speechSynthesis : null;
+
+/** Встроенные голоса систем, которые звучат лучше остальных. Ищутся по части имени, по порядку. */
+const PREFERRED_VOICES: Record<string, string[]> = {
+  ru: ['Milena', 'Microsoft Svetlana', 'Microsoft Irina', 'Google русский', 'Yuri'],
+  en: ['Samantha', 'Microsoft Aria', 'Microsoft Jenny', 'Microsoft Zira', 'Google US English', 'Karen', 'Daniel'],
+};
+
+/**
+ * Пауза между cancel() и следующим speak(): Chrome (и иногда Safari) молча теряет фразу,
+ * если её отправить сразу после отмены предыдущей.
+ */
+const AFTER_CANCEL_MS = 150;
+/** Если синтез за это время так и не начал говорить, фраза отправляется ещё раз. */
+const START_WATCHDOG_MS = 1800;
+
 /**
  * Озвучка фраз по ключам из locales.
  * Если записан файл public/audio/<язык>/<ключ>.mp3 (и он есть в audio/manifest.json), играет он.
@@ -21,9 +37,22 @@ class Voice {
   private finishCurrent: (() => void) | null = null;
   private run = 0;
   private speaking = false;
+  private unlocked = false;
+  private cancelledAt = -Infinity;
+  private voices: SpeechSynthesisVoice[] = [];
+  /** Ссылки на звучащие фразы: Chrome теряет события фразы, если её съел сборщик мусора. */
+  private live = new Set<SpeechSynthesisUtterance>();
 
   /** Показывает текст фразы, пока она звучит (подсказка для взрослых). */
   onSubtitle: (text: string, speaker: Speaker) => void = () => {};
+
+  constructor() {
+    if (!synth) return;
+    // Chrome отдаёт список голосов не сразу, а по событию voiceschanged.
+    const load = () => (this.voices = synth.getVoices());
+    load();
+    synth.addEventListener?.('voiceschanged', load);
+  }
 
   get isSpeaking(): boolean {
     return this.speaking;
@@ -39,13 +68,20 @@ class Voice {
     }
   }
 
-  /** Разрешает звук на iPhone и iPad: вызывать прямо в обработчике касания. */
+  /** Разрешает звук на iPhone и iPad: вызывать прямо в обработчике касания. Достаточно одного раза. */
   unlock(): void {
-    if ('speechSynthesis' in window) {
-      const silent = new SpeechSynthesisUtterance(' ');
-      silent.volume = 0;
-      window.speechSynthesis.speak(silent);
-    }
+    if (!synth || this.unlocked) return;
+    this.unlocked = true;
+    const silent = new SpeechSynthesisUtterance(' ');
+    silent.volume = 0;
+    this.track(silent);
+    synth.speak(silent);
+  }
+
+  /** Какой голос синтеза сейчас говорит: для раздела взрослых. Пустая строка — голоса для языка нет. */
+  describe(): string {
+    const voice = this.pickVoice();
+    return voice ? `${voice.name} (${voice.lang})` : '';
   }
 
   stop(): void {
@@ -53,7 +89,10 @@ class Voice {
     this.speaking = false;
     this.audio?.pause();
     this.audio = null;
-    if ('speechSynthesis' in window) window.speechSynthesis.cancel();
+    if (synth && (synth.speaking || synth.pending)) {
+      synth.cancel();
+      this.cancelledAt = performance.now();
+    }
     this.finishCurrent?.();
   }
 
@@ -65,7 +104,7 @@ class Voice {
     for (const key of keys) {
       if (run !== this.run) return false;
       this.onSubtitle(t(key), speakerOf(key));
-      await this.speakOne(key);
+      await this.speakOne(key, run);
     }
     if (run !== this.run) return false;
     this.speaking = false;
@@ -73,14 +112,21 @@ class Voice {
     return true;
   }
 
-  private speakOne(key: string): Promise<void> {
+  private speakOne(key: string, run: number): Promise<void> {
     return new Promise((resolve) => {
       let done = false;
+      let timer = 0;
       const end = () => {
         if (done) return;
         done = true;
+        window.clearTimeout(timer);
         this.finishCurrent = null;
         resolve();
+      };
+      /** Страховочный таймер: фраза закончится не позже, чем через ms. */
+      const endAfter = (ms: number) => {
+        window.clearTimeout(timer);
+        timer = window.setTimeout(end, ms);
       };
       this.finishCurrent = end;
 
@@ -91,29 +137,105 @@ class Voice {
         audio.onended = end;
         audio.onerror = end;
         audio.play().catch(end);
-        window.setTimeout(end, 15000);
-      } else {
-        const text = t(key);
-        this.synthesize(text, speakerOf(key), end);
-        // Страховка: синтез может молчать (нет голосов), тогда ждём примерно время чтения.
-        window.setTimeout(end, 1200 + text.length * 90);
+        endAfter(15000);
+        return;
       }
+      const text = t(key);
+      // Примерное время чтения: столько текст висит на экране, если синтез молчит.
+      const readMs = 1200 + text.length * 90;
+      if (!synth) {
+        endAfter(readMs);
+        return;
+      }
+      endAfter(readMs + START_WATCHDOG_MS + 1000);
+      this.synthesize(text, speakerOf(key), run, {
+        started: () => endAfter(readMs * 2 + 3000),
+        ended: end,
+        failed: () => endAfter(readMs),
+      });
     });
   }
 
-  private synthesize(text: string, speaker: Speaker, end: () => void): void {
-    if (!('speechSynthesis' in window)) return;
+  private synthesize(
+    text: string,
+    speaker: Speaker,
+    run: number,
+    on: { started: () => void; ended: () => void; failed: () => void },
+    attempt = 0,
+  ): void {
+    if (!synth) return;
     const utterance = new SpeechSynthesisUtterance(text.replace(/[—–]/g, ','));
     utterance.lang = settings.lang === 'ru' ? 'ru-RU' : 'en-US';
-    const voice = window.speechSynthesis
-      .getVoices()
-      .find((v) => v.lang.replace('_', '-').toLowerCase().startsWith(settings.lang));
-    if (voice) utterance.voice = voice;
+    const voice = this.pickVoice();
+    if (voice) {
+      utterance.voice = voice;
+      utterance.lang = voice.lang;
+    }
     utterance.pitch = speaker === 'animal' ? 1.6 : 1.05;
     utterance.rate = speaker === 'animal' ? 1.0 : 0.92;
-    utterance.onend = end;
-    // При ошибке синтеза (нет голоса для языка) фраза не обрывается: её текст висит на экране время чтения.
-    window.speechSynthesis.speak(utterance);
+
+    let started = false;
+    let retried = false;
+    /** Фраза пропала без звука (так бывает в Chrome после отмены предыдущей): отправляем её ещё раз, один раз. */
+    const retry = () => {
+      if (retried || attempt > 0 || run !== this.run) return;
+      retried = true;
+      this.live.delete(utterance);
+      if (synth.speaking || synth.pending) {
+        synth.cancel();
+        this.cancelledAt = performance.now();
+      }
+      this.synthesize(text, speaker, run, on, attempt + 1);
+    };
+    utterance.onstart = () => {
+      started = true;
+      on.started();
+    };
+    utterance.onend = () => {
+      this.live.delete(utterance);
+      if (started || attempt > 0) on.ended();
+      else retry();
+    };
+    utterance.onerror = (event) => {
+      this.live.delete(utterance);
+      if (event.error === 'interrupted' || event.error === 'canceled') return;
+      console.warn('Синтез речи не смог сказать фразу:', event.error);
+      // Нет голоса для языка или синтез сломался: текст фразы висит на экране время чтения.
+      on.failed();
+    };
+
+    const speak = () => {
+      if (run !== this.run) return; // Пока ждали, фразу перебила другая.
+      this.track(utterance);
+      synth.resume(); // Chrome иногда оставляет синтез на паузе после сворачивания вкладки.
+      synth.speak(utterance);
+      window.setTimeout(() => {
+        // Ни звука, ни ошибки, и синтез ничего не говорит: фраза потерялась.
+        if (!started && this.live.has(utterance) && !synth.speaking) retry();
+      }, START_WATCHDOG_MS);
+    };
+    const wait = this.cancelledAt + AFTER_CANCEL_MS - performance.now();
+    if (wait > 0) window.setTimeout(speak, wait);
+    else speak();
+  }
+
+  private track(utterance: SpeechSynthesisUtterance): void {
+    this.live.add(utterance);
+    // Не копим ссылки бесконечно, если какой-то браузер не пришлёт ни end, ни error.
+    if (this.live.size > 20) this.live.delete(this.live.values().next().value!);
+  }
+
+  /** Голос для текущего языка: сначала известные хорошие встроенные голоса, потом любые с нужным языком. */
+  private pickVoice(): SpeechSynthesisVoice | undefined {
+    if (!synth) return undefined;
+    if (this.voices.length === 0) this.voices = synth.getVoices();
+    const lang = settings.lang;
+    const matching = this.voices.filter((v) => v.lang.replace('_', '-').toLowerCase().startsWith(lang));
+    for (const name of PREFERRED_VOICES[lang] ?? []) {
+      const found = matching.find((v) => v.name.includes(name));
+      if (found) return found;
+    }
+    return matching.find((v) => v.localService) ?? matching[0];
   }
 }
 
