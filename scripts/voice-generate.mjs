@@ -3,6 +3,7 @@
 //
 // Перед запуском задайте в той же консоли (PowerShell):
 //   $env:ELEVENLABS_API_KEY = "ключ из Profile → API Keys"
+//   (голоса по умолчанию заданы ниже в DEFAULT_VOICES; переопределить можно так:)
 //   $env:ELEVENLABS_VOICE_KEEPER = "ID голоса смотрителя"
 //   $env:ELEVENLABS_VOICE_ANIMAL = "ID голоса зверя"
 //   (для отдельного голоса на языке: $env:ELEVENLABS_VOICE_KEEPER_RU, $env:ELEVENLABS_VOICE_ANIMAL_RU и т. п.)
@@ -53,7 +54,13 @@ const langs = values('--lang').length ? values('--lang') : ['ru', 'en'];
 
 // Голос можно задать отдельно для языка: ELEVENLABS_VOICE_KEEPER_RU важнее общего ELEVENLABS_VOICE_KEEPER.
 const voiceEnv = (speaker, lang) => `ELEVENLABS_VOICE_${speaker.toUpperCase()}_${lang.toUpperCase()}`;
-const voiceFor = (speaker, lang) => process.env[voiceEnv(speaker, lang)] || process.env[`ELEVENLABS_VOICE_${speaker.toUpperCase()}`];
+// Голоса игры по умолчанию (переменные окружения важнее).
+const DEFAULT_VOICES = {
+  keeper: { ru: 'TpZlRcB7rTBboAYWa2DC', en: 'ovxTDvt1nK14skZy1sYa' },
+  animal: { ru: 'mM3ODQRL6pN7aItxr6Qo', en: 'mM3ODQRL6pN7aItxr6Qo' },
+};
+const voiceFor = (speaker, lang) =>
+  process.env[voiceEnv(speaker, lang)] || process.env[`ELEVENLABS_VOICE_${speaker.toUpperCase()}`] || DEFAULT_VOICES[speaker]?.[lang];
 const apiKey = process.env.ELEVENLABS_API_KEY;
 
 const jobs = [];
