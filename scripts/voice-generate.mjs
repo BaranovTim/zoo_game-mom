@@ -16,15 +16,27 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const API = 'https://api.elevenlabs.io/v1/text-to-speech';
-const MODEL = process.env.ELEVENLABS_MODEL || 'eleven_multilingual_v2';
-const SETTINGS = { stability: 0.5, similarity_boost: 0.75, style: 0, use_speaker_boost: true, speed: 1 };
+// Модель можно задать отдельно для языка: русский звучит заметно лучше на eleven_v3 (проверено 2026-11-04).
+const MODELS = { ru: 'eleven_v3', en: 'eleven_multilingual_v2' };
+const modelFor = (lang) => process.env[`ELEVENLABS_MODEL_${lang.toUpperCase()}`] || process.env.ELEVENLABS_MODEL || MODELS[lang];
+const settingsFor = (model) =>
+  model === 'eleven_v3'
+    ? { stability: 0.5 } // v3 принимает только 0, 0.5 или 1 и без остальных настроек
+    : { stability: 0.5, similarity_boost: 0.75, style: 0, use_speaker_boost: true, speed: 1 };
+// language_code понимают eleven_v3 и модели v2.5; multilingual_v2 язык определяет сам.
+const requestBody = (job) => {
+  const model = modelFor(job.lang);
+  const body = { text: job.text, model_id: model, voice_settings: settingsFor(model) };
+  if (model !== 'eleven_multilingual_v2') body.language_code = job.lang;
+  return JSON.stringify(body);
+};
 
 const root = fileURLToPath(new URL('..', import.meta.url));
 const readJson = (path) => JSON.parse(readFileSync(join(root, path), 'utf8'));
 const speakers = readJson('src/locales/speakers.json');
 const texts = { ru: readJson('src/locales/ru.json'), en: readJson('src/locales/en.json') };
-// Как фразу произносить, если голос ставит ударение неверно: тот же текст со знаком ударения (U+0301)
-// после ударной гласной. На экране по-прежнему текст из ru.json / en.json.
+// Как фразу произносить, если голос ставит ударение неверно: текст для голоса (например, «Адин!» вместо «Один!»,
+// или знак ударения U+0301 после ударной гласной). На экране по-прежнему текст из ru.json / en.json.
 const readOptional = (path) => (existsSync(join(root, path)) ? readJson(path) : {});
 const spoken = { ru: readOptional('src/locales/ru.voice.json'), en: readOptional('src/locales/en.voice.json') };
 
@@ -56,7 +68,7 @@ for (const lang of langs) {
 }
 
 const chars = jobs.reduce((sum, job) => sum + job.text.length, 0);
-console.log(`Озвучить: ${jobs.length} фраз, ${chars} символов (модель ${MODEL})`);
+console.log(`Озвучить: ${jobs.length} фраз, ${chars} символов (модели: ${langs.map((lang) => `${lang} ${modelFor(lang)}`).join(', ')})`);
 if (dryRun) {
   for (const job of jobs) console.log(`  ${job.lang}/${job.key} [${job.speaker}] ${job.text}`);
   process.exit(0);
@@ -77,7 +89,7 @@ async function speak(job) {
     const response = await fetch(`${API}/${voiceFor(job.speaker, job.lang)}?output_format=mp3_44100_128`, {
       method: 'POST',
       headers: { 'xi-api-key': apiKey, 'Content-Type': 'application/json', Accept: 'audio/mpeg' },
-      body: JSON.stringify({ text: job.text, model_id: MODEL, voice_settings: SETTINGS }),
+      body: requestBody(job),
     });
     if (response.ok) return Buffer.from(await response.arrayBuffer());
     const detail = (await response.text()).slice(0, 300);

@@ -1,16 +1,3 @@
 {
-  "food.egg": "Яйцо́.",
-  "animal.zebra.hello": "Приве́т! Я зе́бра! Я вся в поло́сочку!",
-  "food.hay": "Се́но.",
-  "food.watermelon": "Арбу́з.",
-  "food.nuts": "Оре́шки.",
-  "praise.08": "Пра́вильно!",
-  "animal.orangutan.hello": "Приве́т! Я орангута́н! Я живу́ на де́реве!",
-  "care.brush_ask": "Дава́й приче́шем шёрстку!",
-  "count.01": "Оди́н!",
-  "count.03": "Три!",
-  "animal.fox.this_is": "Э́то лиса́!",
-  "animal.fox.sticker": "Вот накле́йка с лисо́й!",
-  "praise.09": "Су́пер!",
-  "care.clean_done": "Как чи́сто ста́ло!"
+  "count.01": "Адин!"
 }
