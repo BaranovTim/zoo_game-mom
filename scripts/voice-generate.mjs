@@ -5,6 +5,7 @@
 //   $env:ELEVENLABS_API_KEY = "ключ из Profile → API Keys"
 //   $env:ELEVENLABS_VOICE_KEEPER = "ID голоса смотрителя"
 //   $env:ELEVENLABS_VOICE_ANIMAL = "ID голоса зверя"
+//   (для отдельного голоса на языке: $env:ELEVENLABS_VOICE_KEEPER_RU, $env:ELEVENLABS_VOICE_ANIMAL_RU и т. п.)
 // Запуск:
 //   node scripts/voice-generate.mjs --dry-run            что будет озвучено и сколько символов
 //   node scripts/voice-generate.mjs --only animal.panda  только фразы, ключ которых начинается так
@@ -35,7 +36,9 @@ const force = flag('--force');
 const only = values('--only');
 const langs = values('--lang').length ? values('--lang') : ['ru', 'en'];
 
-const voices = { keeper: process.env.ELEVENLABS_VOICE_KEEPER, animal: process.env.ELEVENLABS_VOICE_ANIMAL };
+// Голос можно задать отдельно для языка: ELEVENLABS_VOICE_KEEPER_RU важнее общего ELEVENLABS_VOICE_KEEPER.
+const voiceEnv = (speaker, lang) => `ELEVENLABS_VOICE_${speaker.toUpperCase()}_${lang.toUpperCase()}`;
+const voiceFor = (speaker, lang) => process.env[voiceEnv(speaker, lang)] || process.env[`ELEVENLABS_VOICE_${speaker.toUpperCase()}`];
 const apiKey = process.env.ELEVENLABS_API_KEY;
 
 const jobs = [];
@@ -62,7 +65,7 @@ if (!jobs.length) process.exit(0);
 
 const missing = [
   !apiKey && 'ELEVENLABS_API_KEY',
-  ...[...new Set(jobs.map((job) => job.speaker))].filter((s) => !voices[s]).map((s) => `ELEVENLABS_VOICE_${s.toUpperCase()}`),
+  ...[...new Set(jobs.filter((job) => !voiceFor(job.speaker, job.lang)).map((job) => voiceEnv(job.speaker, job.lang)))],
 ].filter(Boolean);
 if (missing.length) {
   console.error(`Не заданы переменные: ${missing.join(', ')}. Как задать — в начале scripts/voice-generate.mjs.`);
@@ -71,7 +74,7 @@ if (missing.length) {
 
 async function speak(job) {
   for (let attempt = 1; ; attempt++) {
-    const response = await fetch(`${API}/${voices[job.speaker]}?output_format=mp3_44100_128`, {
+    const response = await fetch(`${API}/${voiceFor(job.speaker, job.lang)}?output_format=mp3_44100_128`, {
       method: 'POST',
       headers: { 'xi-api-key': apiKey, 'Content-Type': 'application/json', Accept: 'audio/mpeg' },
       body: JSON.stringify({ text: job.text, model_id: MODEL, voice_settings: SETTINGS }),
