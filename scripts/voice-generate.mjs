@@ -6,6 +6,9 @@
 //   $env:ELEVENLABS_VOICE_KEEPER = "ID голоса смотрителя"
 //   $env:ELEVENLABS_VOICE_ANIMAL = "ID голоса зверя"
 //   (для отдельного голоса на языке: $env:ELEVENLABS_VOICE_KEEPER_RU, $env:ELEVENLABS_VOICE_ANIMAL_RU и т. п.)
+// Голоса игры (выбраны 2026-11-04):
+//   смотритель EN ovxTDvt1nK14skZy1sYa, смотритель RU TpZlRcB7rTBboAYWa2DC (Anton, родной русский),
+//   звери EN и RU mM3ODQRL6pN7aItxr6Qo.
 // Запуск:
 //   node scripts/voice-generate.mjs --dry-run            что будет озвучено и сколько символов
 //   node scripts/voice-generate.mjs --only animal.panda  только фразы, ключ которых начинается так
