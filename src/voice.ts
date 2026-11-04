@@ -10,6 +10,12 @@ function speakerOf(key: string): Speaker {
   return SPEAKERS[key] ?? (key.startsWith('animal.') ? 'animal' : 'keeper');
 }
 
+type AudioContextCtor = typeof AudioContext;
+const AudioCtx: AudioContextCtor | null =
+  typeof window !== 'undefined'
+    ? (window.AudioContext ?? (window as unknown as { webkitAudioContext?: AudioContextCtor }).webkitAudioContext ?? null)
+    : null;
+
 const synth: SpeechSynthesis | null = typeof window !== 'undefined' && 'speechSynthesis' in window ? window.speechSynthesis : null;
 
 /** Встроенные голоса систем, которые звучат лучше остальных. Ищутся по части имени, по порядку. */
@@ -34,6 +40,14 @@ const START_WATCHDOG_MS = 1800;
 class Voice {
   private recorded = new Set<string>();
   private audio: HTMLAudioElement | null = null;
+  /**
+   * Записи играют через Web Audio: Safari (и браузеры на iPhone) не дают запустить new Audio().play()
+   * не из касания, а фразы в игре звучат после смены сцены или анимации. Контекст разблокируется
+   * в unlock() одним касанием, дальше играет когда угодно.
+   */
+  private ctx: AudioContext | null = null;
+  private source: AudioBufferSourceNode | null = null;
+  private buffers = new Map<string, Promise<AudioBuffer | null>>();
   private finishCurrent: (() => void) | null = null;
   private run = 0;
   private speaking = false;
@@ -70,12 +84,46 @@ class Voice {
 
   /** Разрешает звук на iPhone и iPad: вызывать прямо в обработчике касания. Достаточно одного раза. */
   unlock(): void {
+    this.unlockAudio();
     if (!synth || this.unlocked) return;
     this.unlocked = true;
     const silent = new SpeechSynthesisUtterance(' ');
     silent.volume = 0;
     this.track(silent);
     synth.speak(silent);
+  }
+
+  private unlockAudio(): void {
+    if (!AudioCtx) return;
+    try {
+      this.ctx ??= new AudioCtx();
+      if (this.ctx.state !== 'running') void this.ctx.resume().catch(() => {});
+      // Тихий звук прямо в касании: так Safari окончательно разрешает контекст.
+      const silent = this.ctx.createBufferSource();
+      silent.buffer = this.ctx.createBuffer(1, 1, 22050);
+      silent.connect(this.ctx.destination);
+      silent.start(0);
+    } catch {
+      this.ctx = null;
+    }
+  }
+
+  private loadBuffer(path: string): Promise<AudioBuffer | null> {
+    const ctx = this.ctx;
+    if (!ctx) return Promise.resolve(null);
+    let buffer = this.buffers.get(path);
+    if (!buffer) {
+      buffer = fetch(`audio/${path}.mp3`)
+        .then((res) => (res.ok ? res.arrayBuffer() : Promise.reject(new Error(String(res.status)))))
+        .then((data) => new Promise<AudioBuffer>((resolve, reject) => ctx.decodeAudioData(data, resolve, reject)))
+        .catch((error) => {
+          console.warn('Не удалось загрузить запись', path, error);
+          this.buffers.delete(path);
+          return null;
+        });
+      this.buffers.set(path, buffer);
+    }
+    return buffer;
   }
 
   /** Какой голос синтеза сейчас говорит: для раздела взрослых. Пустая строка — голоса для языка нет. */
@@ -89,6 +137,15 @@ class Voice {
     this.speaking = false;
     this.audio?.pause();
     this.audio = null;
+    if (this.source) {
+      this.source.onended = null;
+      try {
+        this.source.stop();
+      } catch {
+        // Уже остановлен.
+      }
+      this.source = null;
+    }
     if (synth && (synth.speaking || synth.pending)) {
       synth.cancel();
       this.cancelledAt = performance.now();
@@ -131,6 +188,28 @@ class Voice {
       this.finishCurrent = end;
 
       const path = `${settings.lang}/${key}`;
+      if (this.recorded.has(path) && this.ctx) {
+        endAfter(15000);
+        void this.loadBuffer(path).then((buffer) => {
+          if (done || run !== this.run) return;
+          if (!buffer || !this.ctx) {
+            this.speakSynth(key, run, end, endAfter);
+            return;
+          }
+          if (this.ctx.state !== 'running') void this.ctx.resume().catch(() => {});
+          const source = this.ctx.createBufferSource();
+          source.buffer = buffer;
+          source.connect(this.ctx.destination);
+          source.onended = () => {
+            if (this.source === source) this.source = null;
+            end();
+          };
+          this.source = source;
+          source.start(0);
+          endAfter(buffer.duration * 1000 + 3000);
+        });
+        return;
+      }
       if (this.recorded.has(path)) {
         const audio = new Audio(`audio/${path}.mp3`);
         this.audio = audio;
@@ -140,19 +219,24 @@ class Voice {
         endAfter(15000);
         return;
       }
-      const text = t(key);
-      // Примерное время чтения: столько текст висит на экране, если синтез молчит.
-      const readMs = 1200 + text.length * 90;
-      if (!synth) {
-        endAfter(readMs);
-        return;
-      }
-      endAfter(readMs + START_WATCHDOG_MS + 1000);
-      this.synthesize(text, speakerOf(key), run, {
-        started: () => endAfter(readMs * 2 + 3000),
-        ended: end,
-        failed: () => endAfter(readMs),
-      });
+      this.speakSynth(key, run, end, endAfter);
+    });
+  }
+
+  /** Фраза без записи (или запись не загрузилась): читает синтез речи браузера. */
+  private speakSynth(key: string, run: number, end: () => void, endAfter: (ms: number) => void): void {
+    const text = t(key);
+    // Примерное время чтения: столько текст висит на экране, если синтез молчит.
+    const readMs = 1200 + text.length * 90;
+    if (!synth) {
+      endAfter(readMs);
+      return;
+    }
+    endAfter(readMs + START_WATCHDOG_MS + 1000);
+    this.synthesize(text, speakerOf(key), run, {
+      started: () => endAfter(readMs * 2 + 3000),
+      ended: end,
+      failed: () => endAfter(readMs),
     });
   }
 
