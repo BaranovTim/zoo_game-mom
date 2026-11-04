@@ -22,6 +22,10 @@ const root = fileURLToPath(new URL('..', import.meta.url));
 const readJson = (path) => JSON.parse(readFileSync(join(root, path), 'utf8'));
 const speakers = readJson('src/locales/speakers.json');
 const texts = { ru: readJson('src/locales/ru.json'), en: readJson('src/locales/en.json') };
+// Как фразу произносить, если голос ставит ударение неверно: тот же текст со знаком ударения (U+0301)
+// после ударной гласной. На экране по-прежнему текст из ru.json / en.json.
+const readOptional = (path) => (existsSync(join(root, path)) ? readJson(path) : {});
+const spoken = { ru: readOptional('src/locales/ru.voice.json'), en: readOptional('src/locales/en.voice.json') };
 
 const args = process.argv.slice(2);
 const flag = (name) => args.includes(name);
@@ -38,7 +42,7 @@ const jobs = [];
 for (const lang of langs) {
   if (!texts[lang]) throw new Error(`Нет текстов для языка «${lang}», есть только ru и en`);
   for (const [key, speaker] of Object.entries(speakers)) {
-    const text = texts[lang][key];
+    const text = spoken[lang][key] ?? texts[lang][key];
     // «text» — строки только для экрана, а фразы с {подстановкой} заранее не записать.
     if (speaker === 'text' || !text || text.includes('{')) continue;
     if (only.length && !only.some((prefix) => key.startsWith(prefix))) continue;
